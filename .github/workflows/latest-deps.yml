@@ -1,0 +1,74 @@
+name: Latest dependencies
+
+# CI installs exactly what uv.lock pins, so a new upstream release cannot fail an unrelated push. A
+# user of the published package does not get our lock: `pip install actrone-memory` takes the newest
+# versions our ranges allow. This workflow tests that set once a week, so a breaking release shows up
+# here as one failed scheduled run instead of red CI on someone's pull request. (tenacity 9.2 changed
+# the declared type of `retry(...)` in October 2026 and failed strict mypy that way.)
+#
+# It is not a merge gate. When it fails, fix the code so it works across the whole range, or cap the
+# range in pyproject.toml and say why in the changelog.
+#
+# Why not `uv lock --upgrade`: uv.lock resolves every extra together, so a framework extra's cap holds
+# the whole lock back. pydantic-ai keeps tenacity below 9.2 there, which would have hidden exactly the
+# break this job exists to catch. A fresh install of only the extras CI uses gets what a user gets.
+
+on:
+  schedule:
+    - cron: "0 7 * * 1" # Mondays 07:00 UTC, an hour after compat-matrix.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+  # mypy's target and the oldest supported Python; see the comment on the same variable in ci.yml.
+  MIN_PYTHON_VERSION: "3.11"
+
+jobs:
+  lint:
+    name: Lint & Type Check (latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ env.MIN_PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0
+        with:
+          version: "0.11.14"  # pinned, not latest: same uv as ci.yml
+      # A fresh resolution of the extras CI uses, ignoring uv.lock (see the comment at the top). The
+      # freeze lists every installed version, so a failure can be traced to the release that caused it.
+      - name: Resolve and install the newest allowed versions
+        run: |
+          uv venv --python ${{ env.MIN_PYTHON_VERSION }}
+          uv pip install -e ".[dev,redis,qdrant,pgvector]"
+          uv pip freeze
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - name: Ruff, style and import checks
+        run: ruff check src/ tests/
+      - name: mypy, strict type checking
+        run: mypy src/actrone_memory --strict
+      - name: Type-check docs and CLI recipe examples
+        run: mypy examples/quickstart.py examples/local_extraction.py examples/frameworks examples/use_cases --strict --explicit-package-bases
+
+  test-unit:
+    name: Unit Tests (latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0
+        with:
+          version: "0.11.14"  # pinned, not latest: same uv as ci.yml
+      - name: Resolve and install the newest allowed versions (see the lint job)
+        run: |
+          uv venv --python ${{ env.PYTHON_VERSION }}
+          uv pip install -e ".[dev,redis,qdrant,pgvector]"
+          uv pip freeze
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - name: Run unit tests
+        run: python -m pytest tests/unit/ -v

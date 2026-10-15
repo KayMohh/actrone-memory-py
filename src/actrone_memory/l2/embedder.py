@@ -53,12 +53,19 @@ def _build_openai_retry() -> Callable[[_RetryableFn], _RetryableFn]:
         # required by the abstract Embedder API.
         transient = (ConnectionError, TimeoutError)
 
-    return retry(
+    # UNSAFE: `Any` on purpose. tenacity 9.2 types `retry(...)` as returning a
+    # `_RetryDecorated[P, R]` wrapper, while 9.1 and earlier returned the function type unchanged.
+    # A direct return fails mypy on 9.2, and a cast of the typed value is a `redundant-cast` error
+    # on 9.1, so the value goes through `Any` to keep one declared type across the supported range
+    # (`tenacity>=8.3,<10`). At runtime it is the same decorator, which hands back a callable of
+    # the original signature.
+    decorator: Any = retry(
         retry=retry_if_exception_type(transient),
         stop=stop_after_attempt(3),
         wait=wait_exponential_jitter(initial=1, max=10),
         reraise=True,
     )
+    return cast("Callable[[_RetryableFn], _RetryableFn]", decorator)
 
 
 _EMBED_RETRY = _build_openai_retry()
