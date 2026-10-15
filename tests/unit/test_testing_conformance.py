@@ -5,6 +5,7 @@ third-party adapters to satisfy, so the suite is not holding others to a standar
 Second, prove the suite actually *detects* violations: a conformance suite that passes
 everything is worse than none, because it manufactures false confidence.
 """
+
 from __future__ import annotations
 
 import pytest

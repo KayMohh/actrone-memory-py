@@ -37,6 +37,7 @@ def _turn(session_id: str = "s1") -> Turn:
 # Key helpers
 # ------------------------------------------------------------------
 
+
 def test_turns_key():
     assert RedisStore._turns_key("agent-1", "sess-1") == "agent:agent-1:session:sess-1:turns"
 
@@ -48,6 +49,7 @@ def test_meta_key():
 # ------------------------------------------------------------------
 # append_turn
 # ------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_append_turn_executes_pipeline():
@@ -81,6 +83,7 @@ async def test_append_turn_raises_on_redis_error():
 # ------------------------------------------------------------------
 # get_recent_turns
 # ------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_get_recent_turns_deserialises_correctly():
@@ -118,6 +121,7 @@ async def test_get_recent_turns_raises_on_redis_error():
 # clear_session
 # ------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_clear_session_deletes_both_keys():
     redis = _make_redis()
@@ -143,6 +147,7 @@ async def test_clear_session_raises_on_redis_error():
 # ------------------------------------------------------------------
 # get_session_metadata
 # ------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_get_session_metadata_returns_none_when_empty():
@@ -175,6 +180,7 @@ async def test_get_session_metadata_parses_correctly():
 # turn_count
 # ------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_turn_count_returns_llen():
     redis = _make_redis()
@@ -199,6 +205,7 @@ async def test_turn_count_raises_on_redis_error():
 # get_session_metadata error path
 # ------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_session_metadata_raises_on_redis_error():
     redis = _make_redis()
@@ -212,6 +219,7 @@ async def test_get_session_metadata_raises_on_redis_error():
 # ------------------------------------------------------------------
 # close
 # ------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_close_calls_aclose():
@@ -227,10 +235,13 @@ async def test_close_calls_aclose():
 # from_url factory (mocked at Redis level)
 # ------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_from_url_raises_on_ping_failure():
-    with patch("actrone_memory.l1.redis_store.Redis") as mock_redis_cls, \
-         patch("actrone_memory.l1.redis_store.ConnectionPool") as mock_pool_cls:
+    with (
+        patch("actrone_memory.l1.redis_store.Redis") as mock_redis_cls,
+        patch("actrone_memory.l1.redis_store.ConnectionPool") as mock_pool_cls,
+    ):
         mock_client = AsyncMock()
         mock_client.ping.side_effect = RedisError("refused")
         mock_redis_cls.return_value = mock_client

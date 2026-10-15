@@ -59,9 +59,7 @@ async def test_perfect_and_zero_retrieval_cases():
 
 
 def test_format_table_contains_metrics():
-    report = _aggregate(
-        [QueryOutcome("q", ["m1", "m2"], frozenset({"m1"}), latency_ms=1.5)], k=5
-    )
+    report = _aggregate([QueryOutcome("q", ["m1", "m2"], frozenset({"m1"}), latency_ms=1.5)], k=5)
     table = report.format_table()
     assert "recall@5" in table
     assert "MRR" in table
@@ -69,6 +67,7 @@ def test_format_table_contains_metrics():
 
 
 # ── metrics units ────────────────────────────────────────────────────────────
+
 
 def test_query_outcome_hit_rank():
     assert QueryOutcome("q", ["x", "y", "m1"], frozenset({"m1"}), 0.0).hit_rank == 3
@@ -101,6 +100,7 @@ def test_percentile_edges():
 
 
 # ── Comparative benchmark ─────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_run_comparison_actrone_beats_naive_baseline():

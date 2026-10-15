@@ -36,6 +36,7 @@ def _entry(content: str = "Paris is in France.") -> MemoryEntry:
 # upsert
 # ------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_upsert_calls_client_upsert():
     client = AsyncMock()
@@ -66,6 +67,7 @@ async def test_upsert_raises_store_error_on_failure():
 # upsert_batch
 # ------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_upsert_batch_skips_entries_without_embedding():
     client = AsyncMock()
@@ -91,6 +93,7 @@ async def test_upsert_batch_no_op_on_empty_list():
 # ------------------------------------------------------------------
 # search
 # ------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_search_returns_ranked_entries():
@@ -136,6 +139,7 @@ async def test_search_raises_on_client_error():
 # delete
 # ------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_delete_calls_client_delete():
     client = AsyncMock()
@@ -157,6 +161,7 @@ async def test_delete_raises_store_error_on_failure():
 # delete_agent_memories
 # ------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_delete_agent_memories_calls_client():
     client = AsyncMock()
@@ -177,6 +182,7 @@ async def test_delete_agent_memories_raises_on_failure():
 # ------------------------------------------------------------------
 # ensure_collection
 # ------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_ensure_collection_creates_when_missing():
@@ -209,6 +215,7 @@ async def test_ensure_collection_raises_on_error():
 # upsert_batch error path
 # ------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_upsert_batch_raises_on_client_error():
     client = AsyncMock()
@@ -221,6 +228,7 @@ async def test_upsert_batch_raises_on_client_error():
 # ------------------------------------------------------------------
 # delete 404 path (MemoryNotFoundError)
 # ------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_delete_raises_memory_not_found_on_404():
@@ -242,6 +250,7 @@ async def test_delete_raises_memory_not_found_on_404():
 # close
 # ------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_close_calls_client_close():
     client = AsyncMock()
@@ -253,6 +262,7 @@ async def test_close_calls_client_close():
 # ------------------------------------------------------------------
 # from_url factory (mocked)
 # ------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_from_url_raises_on_connection_error():

@@ -60,8 +60,10 @@ def test_prompt_matches_the_shared_spec():
 # OpenAIFactExtractor (any OpenAI-compatible client)
 # ------------------------------------------------------------------
 
-_ONE_FACT = '{"facts": [{"content": "The user\'s name is Alex.", "sensitivity": "pii", ' \
+_ONE_FACT = (
+    '{"facts": [{"content": "The user\'s name is Alex.", "sensitivity": "pii", '
     '"topic_tags": ["identity"], "importance": 0.8}]}'
+)
 
 
 class _RejectedError(Exception):
@@ -144,13 +146,16 @@ async def test_openai_extractor_returns_nothing_when_both_formats_fail():
 
 def test_openai_extractor_builds_a_client_for_a_base_url():
     pytest.importorskip("openai")
-    extractor = OpenAIFactExtractor(api_key="local", model="m", base_url="http://localhost:11434/v1")
+    extractor = OpenAIFactExtractor(
+        api_key="local", model="m", base_url="http://localhost:11434/v1"
+    )
     assert str(extractor._client.base_url).startswith("http://localhost:11434/v1")
 
 
 # ------------------------------------------------------------------
 # parse_facts
 # ------------------------------------------------------------------
+
 
 def test_parse_facts_envelope():
     raw = '{"facts": [{"content": "User is named Alex.", "sensitivity": "pii", "importance": 0.9}]}'
@@ -203,6 +208,7 @@ def test_parse_facts_clamps_content_and_count():
 # ------------------------------------------------------------------
 # extract_memories (public API)
 # ------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_extract_memories_stores_facts_with_provenance():
@@ -264,6 +270,7 @@ async def test_extraction_rides_summarise_path():
 # ------------------------------------------------------------------
 # _build_extractor gating
 # ------------------------------------------------------------------
+
 
 def test_build_extractor_off_by_default():
     cfg = MemoryConfig()

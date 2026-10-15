@@ -59,23 +59,17 @@ def test_config_error_carries_details():
 def test_validate_runtime_raises_on_unbalanced_rank_weights():
     """The documented blend is relevance × cosine + recency × recency, so the
     weights must sum to 1.0 rather than silently rescaling every score."""
-    cfg = MemoryConfig(
-        embedding_provider="local", relevance_weight=0.9, recency_weight=0.9
-    )  # type: ignore[call-arg]
+    cfg = MemoryConfig(embedding_provider="local", relevance_weight=0.9, recency_weight=0.9)  # type: ignore[call-arg]
     with pytest.raises(ConfigurationError, match="sum to 1.0"):
         cfg.validate_runtime()
 
 
 def test_validate_runtime_accepts_balanced_rank_weights():
-    cfg = MemoryConfig(
-        embedding_provider="local", relevance_weight=0.6, recency_weight=0.4
-    )  # type: ignore[call-arg]
+    cfg = MemoryConfig(embedding_provider="local", relevance_weight=0.6, recency_weight=0.4)  # type: ignore[call-arg]
     cfg.validate_runtime()
 
 
-@pytest.mark.parametrize(
-    "field", ["max_session_turns", "max_episodic_memories", "rerank_top_k"]
-)
+@pytest.mark.parametrize("field", ["max_session_turns", "max_episodic_memories", "rerank_top_k"])
 def test_validate_runtime_rejects_non_positive_limits(field: str):
     cfg = MemoryConfig(embedding_provider="local", **{field: 0})  # type: ignore[call-arg]
     with pytest.raises(ConfigurationError, match=field):

@@ -133,8 +133,14 @@ async def test_delete_memory_delegates_to_l2(fake_config: MemoryConfig):
 @pytest.mark.asyncio
 async def test_search_memories_delegates_to_l2(fake_config: MemoryConfig):
     memories = [
-        MemoryEntry(agent_id="a", session_id="s", content="x", content_type="summary",
-                    embedding=[0.1, 0.2, 0.3, 0.4], token_count=10),
+        MemoryEntry(
+            agent_id="a",
+            session_id="s",
+            content="x",
+            content_type="summary",
+            embedding=[0.1, 0.2, 0.3, 0.4],
+            token_count=10,
+        ),
     ]
     mm = _make_manager(fake_config, [], memories)
     results = await mm.search_memories("a", "query", limit=5)
@@ -198,10 +204,22 @@ async def test_summarise_session_upserts_summary(fake_config: MemoryConfig):
 @pytest.mark.asyncio
 async def test_prune_memories_within_budget(fake_config: MemoryConfig):
     memories = [
-        MemoryEntry(agent_id="a", session_id="s", content="a", content_type="summary",
-                    embedding=[0.1, 0.2, 0.3, 0.4], token_count=50),
-        MemoryEntry(agent_id="a", session_id="s", content="b", content_type="summary",
-                    embedding=[0.1, 0.2, 0.3, 0.4], token_count=50),
+        MemoryEntry(
+            agent_id="a",
+            session_id="s",
+            content="a",
+            content_type="summary",
+            embedding=[0.1, 0.2, 0.3, 0.4],
+            token_count=50,
+        ),
+        MemoryEntry(
+            agent_id="a",
+            session_id="s",
+            content="b",
+            content_type="summary",
+            embedding=[0.1, 0.2, 0.3, 0.4],
+            token_count=50,
+        ),
     ]
     mm = _make_manager(fake_config, [], memories)
     ctx = await mm.retrieve_context("a", "s", "q", token_budget=4096)
@@ -211,6 +229,7 @@ async def test_prune_memories_within_budget(fake_config: MemoryConfig):
 # ------------------------------------------------------------------
 # auto-summarise trigger (above threshold)
 # ------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_auto_summarise_triggered_above_threshold(fake_config: MemoryConfig):
@@ -246,6 +265,7 @@ async def test_auto_summarise_suppressed_when_lock_not_acquired(fake_config: Mem
 # get_session_metadata on manager
 # ------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_session_metadata_delegates_to_l1(fake_config: MemoryConfig):
     mm = _make_manager(fake_config, [], [])
@@ -261,6 +281,7 @@ async def test_get_session_metadata_delegates_to_l1(fake_config: MemoryConfig):
 # _summarise_session error path
 # ------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_summarise_session_swallows_exceptions(fake_config: MemoryConfig):
     mm = _make_manager(fake_config, [], [])
@@ -272,6 +293,7 @@ async def test_summarise_session_swallows_exceptions(fake_config: MemoryConfig):
 # ------------------------------------------------------------------
 # create_memory_manager context manager
 # ------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_create_memory_manager_context_manager(fake_config: MemoryConfig):
@@ -323,8 +345,9 @@ class _RecordingStore:
     async def upsert(self, entry: MemoryEntry) -> None:
         self.entries.append(entry)
 
-    async def search(self, agent_id, query_embedding, threshold, limit=20,
-                     content_types=None, query_text=None) -> list[MemoryEntry]:
+    async def search(
+        self, agent_id, query_embedding, threshold, limit=20, content_types=None, query_text=None
+    ) -> list[MemoryEntry]:
         return list(self.entries)
 
     async def delete(self, memory_id: str) -> None:

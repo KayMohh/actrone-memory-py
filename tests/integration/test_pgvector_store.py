@@ -9,6 +9,7 @@ pass it, the suite is wrong or the adapter is.
 
 Run with: uv run pytest tests/integration/test_pgvector_store.py -m integration
 """
+
 from __future__ import annotations
 
 import re
@@ -55,9 +56,7 @@ def pg_dsn():
 async def store(pg_dsn: str, request: pytest.FixtureRequest):
     # One container, but a table per test: sharing the container is a speed optimisation,
     # sharing rows between tests is a correctness bug.
-    store = await PgVectorStore.from_dsn(
-        pg_dsn, dimensions=_DIMENSIONS, table=_table_for(request)
-    )
+    store = await PgVectorStore.from_dsn(pg_dsn, dimensions=_DIMENSIONS, table=_table_for(request))
     yield store
     await store.close()
 
@@ -174,9 +173,7 @@ async def test_delete_agent_memories_is_scoped(store: PgVectorStore) -> None:
     await store.delete_agent_memories("agent-1")
 
     assert (
-        await store.search(
-            agent_id="agent-1", query_embedding=_vector(0), threshold=0.0, limit=10
-        )
+        await store.search(agent_id="agent-1", query_embedding=_vector(0), threshold=0.0, limit=10)
         == []
     )
     survivors = await store.search(

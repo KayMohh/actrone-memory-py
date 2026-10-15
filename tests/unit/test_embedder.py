@@ -122,6 +122,7 @@ def test_cached_embedder_dimensions_delegates_to_inner():
 # OpenAIEmbedder (mocked openai client)
 # ------------------------------------------------------------------
 
+
 def _make_openai_embedder() -> tuple[OpenAIEmbedder, MagicMock]:
     """Construct OpenAIEmbedder then swap out the client with a mock."""
     embedder = OpenAIEmbedder(api_key="sk-test", model="text-embedding-3-small", dimensions=1536)
@@ -184,6 +185,7 @@ async def test_openai_embedder_raises_embedding_error_on_failure():
 # ------------------------------------------------------------------
 # HashingEmbedder (dependency-free, deterministic default)
 # ------------------------------------------------------------------
+
 
 def test_hashing_embedder_rejects_bad_dimensions():
     with pytest.raises(ValueError, match="dimensions"):

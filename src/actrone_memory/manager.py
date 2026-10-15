@@ -457,9 +457,7 @@ class MemoryManager:
         reranked = await self._maybe_rerank(query, candidates)
         return reranked[:limit]
 
-    async def _maybe_rerank(
-        self, query: str, entries: list[MemoryEntry]
-    ) -> list[MemoryEntry]:
+    async def _maybe_rerank(self, query: str, entries: list[MemoryEntry]) -> list[MemoryEntry]:
         """Apply the optional cross-encoder rerank over the top-K candidates. No-op when the
         reranker is disabled/unavailable, so callers always get a valid ordering."""
         if self._reranker is None or not entries:
@@ -858,8 +856,10 @@ class MemoryManager:
             raw_embedder, redis_client, ttl_seconds=cfg.embedding_cache_ttl_seconds
         )
 
-        resolved_l1: L1Store = l1 if l1 is not None else RedisStore(
-            redis_client, cfg.session_ttl_hours, cfg.max_session_turns
+        resolved_l1: L1Store = (
+            l1
+            if l1 is not None
+            else RedisStore(redis_client, cfg.session_ttl_hours, cfg.max_session_turns)
         )
         try:
             resolved_l2: L2Store = (
@@ -902,9 +902,7 @@ class MemoryManager:
         """
         if not cfg.extract_facts or cfg.embedding_provider != "openai":
             return None
-        return OpenAIFactExtractor(
-            api_key=_resolve_openai_key(cfg), model=cfg.summarisation_model
-        )
+        return OpenAIFactExtractor(api_key=_resolve_openai_key(cfg), model=cfg.summarisation_model)
 
     @staticmethod
     def _build_embedder(cfg: MemoryConfig) -> tuple[Embedder, _Summariser | None]:

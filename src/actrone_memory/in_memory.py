@@ -98,9 +98,7 @@ class InMemoryStore:
         self._created_at.pop(key, None)
         self._summary_locks.pop(key, None)
 
-    async def get_session_metadata(
-        self, agent_id: str, session_id: str
-    ) -> SessionMetadata | None:
+    async def get_session_metadata(self, agent_id: str, session_id: str) -> SessionMetadata | None:
         key = _session_key(agent_id, session_id)
         bucket = self._turns.get(key)
         if not bucket:
@@ -136,9 +134,7 @@ class InMemoryStore:
 
     async def upsert(self, entry: MemoryEntry) -> None:
         if entry.embedding is None:
-            raise ValueError(
-                f"MemoryEntry {entry.id} has no embedding, embed before upserting."
-            )
+            raise ValueError(f"MemoryEntry {entry.id} has no embedding, embed before upserting.")
         bucket = self._memories.setdefault(entry.agent_id, [])
         for i, existing in enumerate(bucket):
             if existing.id == entry.id:
@@ -172,11 +168,7 @@ class InMemoryStore:
             return []
 
         allowed: set[str] | None = set(content_types) if content_types else None
-        candidates = [
-            entry
-            for entry in bucket
-            if allowed is None or entry.content_type in allowed
-        ]
+        candidates = [entry for entry in bucket if allowed is None or entry.content_type in allowed]
         return hybrid_rank(
             candidates,
             query_embedding,

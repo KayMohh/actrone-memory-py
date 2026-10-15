@@ -10,6 +10,7 @@ Two Tier-2 surfaces, gated differently because LangChain changed shape between m
 Skipped entirely when langchain-core is not installed.
 Run with: pip install actrone-memory[langchain] && pytest tests/contract/test_langchain.py
 """
+
 from __future__ import annotations
 
 import pytest
@@ -129,8 +130,9 @@ def test_base_memory_adapter_explains_itself_on_langchain_1x(mock_mm: AsyncMock)
 
 def test_import_error_without_langchain() -> None:
     modules = {"langchain_core": None, "langchain_core.memory": None}
-    with patch.dict("sys.modules", modules), pytest.raises(
-        ImportError, match=r"pip install actrone-memory\[langchain\]"
+    with (
+        patch.dict("sys.modules", modules),
+        pytest.raises(ImportError, match=r"pip install actrone-memory\[langchain\]"),
     ):
         ActroneMemory(agent_id="agent-1", session_id="default")
 

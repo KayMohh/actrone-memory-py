@@ -3,6 +3,7 @@
 Skipped automatically when dspy is not installed.
 Run with: pip install actrone-memory[dspy] && pytest tests/contract/test_dspy.py
 """
+
 from __future__ import annotations
 
 import pytest
@@ -29,10 +30,12 @@ def _make_memory(content: str) -> MemoryEntry:
 @pytest.fixture
 def mock_mm() -> AsyncMock:
     mm = AsyncMock()
-    mm.search_memories = AsyncMock(return_value=[
-        _make_memory("Paris is the capital of France."),
-        _make_memory("France is in Western Europe."),
-    ])
+    mm.search_memories = AsyncMock(
+        return_value=[
+            _make_memory("Paris is the capital of France."),
+            _make_memory("France is in Western Europe."),
+        ]
+    )
     mm.store_turn = AsyncMock(return_value="turn-id-1")
     return mm
 
@@ -108,8 +111,9 @@ def test_default_k_is_five() -> None:
 
 
 def test_import_error_without_dspy() -> None:
-    with patch.dict("sys.modules", {"dspy": None}), pytest.raises(
-        ImportError, match=r"pip install actrone-memory\[dspy\]"
+    with (
+        patch.dict("sys.modules", {"dspy": None}),
+        pytest.raises(ImportError, match=r"pip install actrone-memory\[dspy\]"),
     ):
         ActroneRM(agent_id="agent-1")
 

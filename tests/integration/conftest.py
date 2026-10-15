@@ -9,6 +9,7 @@ To exclude them (the default for unit-test runs):
 
     uv run pytest -m "not integration"
 """
+
 from __future__ import annotations
 
 import pytest

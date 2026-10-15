@@ -68,9 +68,7 @@ def test_new_adapter_recipes_are_backed_by_mypy_checked_examples() -> None:
     real ``examples/frameworks/<slug>.py`` whose ``# region`` snippet is extracted into
     snippets.json. ``mypy examples/frameworks/`` type-checks those sources in CI, so a recipe whose
     wiring stops compiling fails the build, the recipes are verified, not just strings."""
-    snippets_path = (
-        Path(__file__).resolve().parents[2] / "examples" / "snippets.json"
-    )
+    snippets_path = Path(__file__).resolve().parents[2] / "examples" / "snippets.json"
     snippets = json.loads(snippets_path.read_text(encoding="utf-8"))
     new_this_cycle = [
         "core",
@@ -192,8 +190,11 @@ def test_every_written_file_is_valid_python_with_no_top_level_await() -> None:
     for framework, recipe in RECIPES.items():
         tree = ast.parse(render_standalone_file(recipe), filename=f"{framework}.py")
         top_level_awaits = [
-            node for stmt in tree.body if not isinstance(stmt, ast.AsyncFunctionDef)
-            for node in ast.walk(stmt) if isinstance(node, ast.Await)
+            node
+            for stmt in tree.body
+            if not isinstance(stmt, ast.AsyncFunctionDef)
+            for node in ast.walk(stmt)
+            if isinstance(node, ast.Await)
         ]
         assert top_level_awaits == [], framework
 

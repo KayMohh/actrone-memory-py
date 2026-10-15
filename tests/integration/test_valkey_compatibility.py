@@ -12,6 +12,7 @@ plus the behaviours that depend on Redis-specific semantics (TTL, list trimming,
 
 Run with: uv run pytest tests/integration/test_valkey_compatibility.py -m integration
 """
+
 from __future__ import annotations
 
 import asyncio

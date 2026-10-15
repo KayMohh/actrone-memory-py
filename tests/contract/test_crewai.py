@@ -3,6 +3,7 @@
 Skipped automatically when crewai is not installed.
 Run with: pip install actrone-memory[crewai] && pytest tests/contract/test_crewai.py
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -98,8 +99,9 @@ async def test_reset_delegates_to_manager(memory: ActroneCrewMemory, mock_mm: As
 
 
 def test_import_error_without_crewai() -> None:
-    with patch.dict("sys.modules", {"crewai": None}), pytest.raises(
-        ImportError, match=r"pip install actrone-memory\[crewai\]"
+    with (
+        patch.dict("sys.modules", {"crewai": None}),
+        pytest.raises(ImportError, match=r"pip install actrone-memory\[crewai\]"),
     ):
         ActroneCrewMemory(agent_id="agent-1", session_id="default")
 

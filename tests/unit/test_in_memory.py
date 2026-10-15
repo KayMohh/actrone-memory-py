@@ -41,6 +41,7 @@ def _entry(
 # Protocol conformance
 # ------------------------------------------------------------------
 
+
 def test_in_memory_store_satisfies_both_protocols():
     store = InMemoryStore()
     assert isinstance(store, L1Store)
@@ -50,6 +51,7 @@ def test_in_memory_store_satisfies_both_protocols():
 # ------------------------------------------------------------------
 # cosine_similarity
 # ------------------------------------------------------------------
+
 
 def test_cosine_identical_vectors_is_one():
     assert cosine_similarity([1.0, 2.0, 3.0], [1.0, 2.0, 3.0]) == pytest.approx(1.0)
@@ -71,6 +73,7 @@ def test_cosine_tolerates_length_mismatch():
 # ------------------------------------------------------------------
 # L1 behaviour
 # ------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_append_and_get_recent_turns():
@@ -159,6 +162,7 @@ async def test_summary_lock_reacquirable_after_expiry(monkeypatch: pytest.Monkey
 # L2 behaviour
 # ------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_upsert_requires_embedding():
     store = InMemoryStore()
@@ -206,8 +210,12 @@ async def test_search_content_type_filter():
     store = InMemoryStore()
     e = _entry("a1", "summary-only", [1.0, 0.0])
     e_summary = MemoryEntry(
-        agent_id="a1", session_id="s1", content="s", content_type="summary",
-        embedding=[1.0, 0.0], token_count=1,
+        agent_id="a1",
+        session_id="s1",
+        content="s",
+        content_type="summary",
+        embedding=[1.0, 0.0],
+        token_count=1,
     )
     await store.upsert(e)
     await store.upsert(e_summary)
@@ -251,6 +259,7 @@ async def test_close_is_noop():
 # End-to-end: zero-service local-first MemoryManager
 # ------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_local_first_create_needs_no_services_or_key():
     """The headline parity guarantee: create() with all-default config runs with
@@ -292,6 +301,7 @@ async def test_local_first_uses_in_memory_store_instances():
 # Provenance-typing v1 (source + sensitivity) + local erase
 # ------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_injected_fact_carries_provenance_end_to_end():
     async with await MemoryManager.create(MemoryConfig()) as mm:
@@ -310,8 +320,12 @@ async def test_injected_fact_carries_provenance_end_to_end():
 @pytest.mark.asyncio
 async def test_provenance_defaults_are_backwards_compatible():
     entry = MemoryEntry(
-        agent_id="a", session_id="s", content="x", content_type="injected",
-        embedding=[1.0, 0.0], token_count=1,
+        agent_id="a",
+        session_id="s",
+        content="x",
+        content_type="injected",
+        embedding=[1.0, 0.0],
+        token_count=1,
     )
     assert entry.source == "unknown"
     assert entry.sensitivity == "none"

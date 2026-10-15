@@ -9,6 +9,7 @@ fail fast.
 
 Backoff waits are patched to zero so the assertions stay fast and deterministic.
 """
+
 from __future__ import annotations
 
 from typing import Any

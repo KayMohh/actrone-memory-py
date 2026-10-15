@@ -236,8 +236,7 @@ class PostgresStore:
                     session_id,
                 )
                 await conn.execute(
-                    f"DELETE FROM {self._locks_table} "
-                    f"WHERE agent_id = $1 AND session_id = $2",  # nosec B608
+                    f"DELETE FROM {self._locks_table} WHERE agent_id = $1 AND session_id = $2",  # nosec B608
                     agent_id,
                     session_id,
                 )
@@ -245,9 +244,7 @@ class PostgresStore:
             raise StoreConnectionError("Postgres", exc) from exc
 
     @track_store_op("l1", "get_session_metadata")
-    async def get_session_metadata(
-        self, agent_id: str, session_id: str
-    ) -> SessionMetadata | None:
+    async def get_session_metadata(self, agent_id: str, session_id: str) -> SessionMetadata | None:
         """Session stats, or ``None`` when the session has no unexpired turns."""
         try:
             async with self._pool.acquire() as conn:

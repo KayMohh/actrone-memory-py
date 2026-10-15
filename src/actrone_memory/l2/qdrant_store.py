@@ -194,6 +194,7 @@ class QdrantStore:
         Time complexity: O(n log n) for re-ranking n Qdrant results.
         """
         from actrone_memory.retrieval import fuse_channels
+
         filters = [qmodels.FieldCondition(key="agent_id", match=qmodels.MatchValue(value=agent_id))]
         if content_types:
             filters.append(

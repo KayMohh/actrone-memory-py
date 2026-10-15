@@ -118,9 +118,7 @@ async def test_manager_applies_reranker_in_search() -> None:
         assert len(baseline) == 2
 
         class _ReverseReranker:
-            async def rerank(
-                self, query: str, entries: Any, *, top_k: int | None = None
-            ) -> Any:
+            async def rerank(self, query: str, entries: Any, *, top_k: int | None = None) -> Any:
                 return list(reversed(entries))
 
         mm._reranker = _ReverseReranker()  # type: ignore[assignment]

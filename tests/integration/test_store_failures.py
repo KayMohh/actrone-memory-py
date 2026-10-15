@@ -10,6 +10,7 @@ errors. Run via::
 
     uv run pytest tests/integration/test_store_failures.py -m integration
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -106,6 +107,7 @@ async def test_redis_recovers_after_restart(redis_store_recoverable):
         try:
             from redis.asyncio import Redis as _Redis
             from redis.exceptions import RedisError
+
             host = container.get_container_host_ip()
             port = container.get_exposed_port(6379)
             probe: _Redis = _Redis.from_url(f"redis://{host}:{port}", socket_timeout=1.0)

@@ -392,9 +392,7 @@ class PgVectorStore:
         :meth:`close` will not close a pool it does not own, and you must call
         :meth:`ensure_schema` yourself once at startup.
         """
-        return cls(
-            pool, table, dimensions, relevance_weight, recency_weight, owns_pool=False
-        )
+        return cls(pool, table, dimensions, relevance_weight, recency_weight, owns_pool=False)
 
     async def close(self) -> None:
         """Close the connection pool, unless it was supplied by the application."""

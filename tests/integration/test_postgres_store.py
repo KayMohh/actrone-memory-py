@@ -7,6 +7,7 @@ retention cap, and a fleet-wide summary lock.
 
 Run with: uv run pytest tests/integration/test_postgres_store.py -m integration
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -205,9 +206,7 @@ async def test_both_tiers_can_share_one_pool(pg_dsn: str) -> None:
     assert pool is not None
     try:
         l1 = PostgresStore.from_pool(pool, table="shared_turns")
-        l2 = pgvector_store.PgVectorStore.from_pool(
-            pool, table="shared_memories", dimensions=4
-        )
+        l2 = pgvector_store.PgVectorStore.from_pool(pool, table="shared_memories", dimensions=4)
         await l1.ensure_schema()
         await l2.ensure_schema()
 

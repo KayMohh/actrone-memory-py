@@ -3,6 +3,7 @@
 Skipped automatically when autogen-core is not installed.
 Run with: pip install actrone-memory[autogen] && pytest tests/contract/test_autogen.py
 """
+
 from __future__ import annotations
 
 import pytest
@@ -19,19 +20,19 @@ from actrone_memory.models import MemoryEntry
 @pytest.fixture
 def mock_mm() -> AsyncMock:
     mm = AsyncMock()
-    mm.search_memories = AsyncMock(return_value=[
-        MemoryEntry(
-            agent_id="agent-1",
-            session_id="default",
-            content="Paris is the capital of France.",
-            content_type="summary",
-            importance_score=0.9,
-            token_count=10,
-        )
-    ])
-    mm.retrieve_context = AsyncMock(return_value=MagicMock(
-        recent_turns=[], episodic_memories=[]
-    ))
+    mm.search_memories = AsyncMock(
+        return_value=[
+            MemoryEntry(
+                agent_id="agent-1",
+                session_id="default",
+                content="Paris is the capital of France.",
+                content_type="summary",
+                importance_score=0.9,
+                token_count=10,
+            )
+        ]
+    )
+    mm.retrieve_context = AsyncMock(return_value=MagicMock(recent_turns=[], episodic_memories=[]))
     mm.inject_memory = AsyncMock(return_value="mem-id-1")
     mm.clear_session = AsyncMock()
     return mm
@@ -131,8 +132,9 @@ async def test_add_non_text_content_is_noop(
 def test_import_error_without_autogen() -> None:
     """Verify ImportError is raised with a helpful message when autogen is absent."""
     modules = {"autogen_core": None, "autogen_core.memory": None}
-    with patch.dict("sys.modules", modules), pytest.raises(
-        ImportError, match=r"pip install actrone-memory\[autogen\]"
+    with (
+        patch.dict("sys.modules", modules),
+        pytest.raises(ImportError, match=r"pip install actrone-memory\[autogen\]"),
     ):
         ActroneAutoGenMemory(agent_id="agent-1")
 

@@ -3,6 +3,7 @@
 Skipped automatically when haystack-ai is not installed.
 Run with: pip install actrone-memory[haystack] && pytest tests/contract/test_haystack.py
 """
+
 from __future__ import annotations
 
 import pytest
@@ -18,24 +19,26 @@ from actrone_memory.models import MemoryEntry
 @pytest.fixture
 def mock_mm_retriever() -> AsyncMock:
     mm = AsyncMock()
-    mm.search_memories = AsyncMock(return_value=[
-        MemoryEntry(
-            agent_id="agent-1",
-            session_id="default",
-            content="Paris is the capital of France.",
-            content_type="summary",
-            importance_score=0.85,
-            token_count=10,
-        ),
-        MemoryEntry(
-            agent_id="agent-1",
-            session_id="default",
-            content="France is a country in Western Europe.",
-            content_type="summary",
-            importance_score=0.70,
-            token_count=10,
-        ),
-    ])
+    mm.search_memories = AsyncMock(
+        return_value=[
+            MemoryEntry(
+                agent_id="agent-1",
+                session_id="default",
+                content="Paris is the capital of France.",
+                content_type="summary",
+                importance_score=0.85,
+                token_count=10,
+            ),
+            MemoryEntry(
+                agent_id="agent-1",
+                session_id="default",
+                content="France is a country in Western Europe.",
+                content_type="summary",
+                importance_score=0.70,
+                token_count=10,
+            ),
+        ]
+    )
     return mm
 
 
@@ -96,7 +99,8 @@ async def test_writer_stores_turn(writer: ActroneWriter, mock_mm_writer: AsyncMo
     )
     assert result == {"memories_written": 1}
     mock_mm_writer.store_turn.assert_awaited_once_with(
-        "agent-1", "default",
+        "agent-1",
+        "default",
         "What is the capital of France?",
         "Paris is the capital of France.",
     )
@@ -114,13 +118,15 @@ async def test_retriever_metadata_contains_memory_id(
 
 
 def test_import_error_without_haystack() -> None:
-    with patch.dict("sys.modules", {"haystack": None}), pytest.raises(
-        ImportError, match=r"pip install actrone-memory\[haystack\]"
+    with (
+        patch.dict("sys.modules", {"haystack": None}),
+        pytest.raises(ImportError, match=r"pip install actrone-memory\[haystack\]"),
     ):
         ActroneRetriever(agent_id="agent-1")
 
-    with patch.dict("sys.modules", {"haystack": None}), pytest.raises(
-        ImportError, match=r"pip install actrone-memory\[haystack\]"
+    with (
+        patch.dict("sys.modules", {"haystack": None}),
+        pytest.raises(ImportError, match=r"pip install actrone-memory\[haystack\]"),
     ):
         ActroneWriter(agent_id="agent-1")
 

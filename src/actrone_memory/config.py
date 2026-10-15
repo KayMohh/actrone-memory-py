@@ -207,6 +207,4 @@ class MemoryConfig(BaseSettings):
         for name in ("max_session_turns", "max_episodic_memories", "rerank_top_k"):
             value = getattr(self, name)
             if value < 1:
-                raise ConfigurationError(
-                    f"{name} must be ≥ 1, got {value}.", details={name: value}
-                )
+                raise ConfigurationError(f"{name} must be ≥ 1, got {value}.", details={name: value})

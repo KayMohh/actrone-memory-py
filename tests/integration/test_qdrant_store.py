@@ -83,9 +83,8 @@ async def test_delete_memory(store: QdrantStore):
 @pytest.mark.asyncio
 async def test_upsert_requires_embedding():
     from actrone_memory.l2.qdrant_store import QdrantStore
-    entry = MemoryEntry(
-        agent_id="a", session_id="s", content="no embed", content_type="turn"
-    )
+
+    entry = MemoryEntry(agent_id="a", session_id="s", content="no embed", content_type="turn")
     store_mock = QdrantStore.__new__(QdrantStore)
     with pytest.raises(ValueError, match="no embedding"):
         await store_mock.upsert(entry)

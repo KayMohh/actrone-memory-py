@@ -3,6 +3,7 @@
 Skipped automatically when llama-index-core is not installed.
 Run with: pip install actrone-memory[llamaindex] && pytest tests/contract/test_llamaindex.py
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -22,21 +23,23 @@ def mock_mm() -> AsyncMock:
     mm = AsyncMock()
     mm.store_turn = AsyncMock(return_value="turn-id-1")
     mm.clear_session = AsyncMock()
-    mm.retrieve_context = AsyncMock(return_value=MagicMock(
-        recent_turns=[
-            MagicMock(user_message="What is 2+2?", assistant_message="4"),
-        ],
-        episodic_memories=[
-            MemoryEntry(
-                agent_id="agent-1",
-                session_id="default",
-                content="Arithmetic is fun.",
-                content_type="summary",
-                importance_score=0.5,
-                token_count=5,
-            )
-        ],
-    ))
+    mm.retrieve_context = AsyncMock(
+        return_value=MagicMock(
+            recent_turns=[
+                MagicMock(user_message="What is 2+2?", assistant_message="4"),
+            ],
+            episodic_memories=[
+                MemoryEntry(
+                    agent_id="agent-1",
+                    session_id="default",
+                    content="Arithmetic is fun.",
+                    content_type="summary",
+                    importance_score=0.5,
+                    token_count=5,
+                )
+            ],
+        )
+    )
     return mm
 
 
@@ -107,8 +110,9 @@ async def test_aget_all_delegates_to_aget(memory: ActroneLlamaMemory) -> None:
 
 def test_import_error_without_llamaindex() -> None:
     modules = {"llama_index": None, "llama_index.core": None, "llama_index.core.memory": None}
-    with patch.dict("sys.modules", modules), pytest.raises(
-        ImportError, match=r"pip install actrone-memory\[llamaindex\]"
+    with (
+        patch.dict("sys.modules", modules),
+        pytest.raises(ImportError, match=r"pip install actrone-memory\[llamaindex\]"),
     ):
         ActroneLlamaMemory(agent_id="agent-1")
 

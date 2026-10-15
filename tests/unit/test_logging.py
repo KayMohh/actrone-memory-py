@@ -6,6 +6,7 @@ These paths had no coverage, which is how a broken pairing shipped: the stdlib
 ``configure_json_logging()`` raised ``AttributeError`` on the first line emitted.
 Every test here actually emits a line and inspects what reached stdout.
 """
+
 from __future__ import annotations
 
 import json

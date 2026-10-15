@@ -5,6 +5,7 @@ metric and never observing it is worse than omitting it, because a ``/metrics``
 scrape then reports a confident zero. These tests assert each collector actually
 moves when the code path it measures runs.
 """
+
 from __future__ import annotations
 
 import json

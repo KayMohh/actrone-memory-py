@@ -133,8 +133,7 @@ async def check_l1_store(factory: Callable[[], L1Store | Awaitable[L1Store]]) ->
         _require(
             [t.user_message for t in turns] == ["first", "second", "third"],
             "get_recent_turns ordering",
-            "turns must come back oldest first, got "
-            f"{[t.user_message for t in turns]!r}",
+            f"turns must come back oldest first, got {[t.user_message for t in turns]!r}",
         )
 
         # `n` must window from the END, otherwise recall silently returns stale context.
@@ -343,8 +342,7 @@ async def check_l2_store(
         _require(
             all(m.content_type == "summary" for m in typed),
             "search honours content_types",
-            f"expected only 'summary' entries, got "
-            f"{sorted({m.content_type for m in typed})!r}",
+            f"expected only 'summary' entries, got {sorted({m.content_type for m in typed})!r}",
         )
 
         # Delete one.
@@ -377,9 +375,7 @@ async def check_l2_store(
         erased = await store.search(
             agent_id="agent-a", query_embedding=near, threshold=0.0, limit=10
         )
-        kept = await store.search(
-            agent_id="agent-b", query_embedding=near, threshold=0.0, limit=10
-        )
+        kept = await store.search(agent_id="agent-b", query_embedding=near, threshold=0.0, limit=10)
         _require(
             erased == [],
             "delete_agent_memories erases the agent",

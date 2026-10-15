@@ -61,9 +61,7 @@ class ActroneGoogleADKMemory(BaseActroneMemory):
                     if text:
                         await mm.inject_memory(outer.agent_id, text, 0.6)
 
-            async def search_memory(
-                self, *, app_name: str, user_id: str, query: str
-            ) -> Any:
+            async def search_memory(self, *, app_name: str, user_id: str, query: str) -> Any:
                 mm = await outer.manager()
                 results = await mm.search_memories(outer.agent_id, query)
                 memories = [
