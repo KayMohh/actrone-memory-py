@@ -41,6 +41,10 @@ jobs:
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - name: Ruff, style and import checks
         run: ruff check src/ tests/
+      # Formatting is checked with the ruff that uv.lock pins, so a ruff release cannot change the
+      # expected layout under an unrelated push. The one-time reformat is in .git-blame-ignore-revs.
+      - name: Ruff, formatting
+        run: ruff format --check src/ tests/
       - name: mypy, strict type checking
         run: mypy src/actrone_memory --strict
       - name: Type-check docs and CLI recipe examples

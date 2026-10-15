@@ -1,0 +1,6 @@
+# Commits that only reformat code, skipped by `git blame` so it shows who last changed the logic.
+# GitHub's blame view reads this file automatically. Locally, run once:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# style: apply ruff format (the first whole-codebase format, with the ruff that uv.lock pins)
+71666c343398acb234de820eb139238fb81cb18b
