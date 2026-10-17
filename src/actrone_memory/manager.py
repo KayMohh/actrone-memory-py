@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
@@ -37,6 +37,7 @@ from actrone_memory.models import (
     Turn,
 )
 from actrone_memory.protocols import L1Store, L2Store
+from actrone_memory.redaction import redact_memories, resolve_redaction
 from actrone_memory.rerank import CrossEncoderReranker, build_reranker
 from actrone_memory.tokens import TokenCounter, build_token_counter
 
@@ -108,6 +109,8 @@ class MemoryManager:
             config.relevance_threshold, embedder.relevance_threshold
         )
         self._count_tokens: TokenCounter = build_token_counter(config.token_counter)
+        # The sensitivity classes masked on read unless a call passes its own ``redact=``.
+        self._redact_default = resolve_redaction(config.redact_sensitivities)
         # Strong references to background tasks. Without these, asyncio's GC
         # may collect the underlying task object mid-execution and silently
         # drop the work. close() drains this set before shutting down stores.
@@ -196,19 +199,23 @@ class MemoryManager:
         session_id: str,
         query: str,
         token_budget: int,
+        *,
+        redact: Iterable[Sensitivity] | None = None,
     ) -> RetrievedContext:
         """Fetch relevant context for the next LLM call using the 4-phase pipeline.
 
-        Phase 1, Parallel fetch: Redis L1 (recent turns) + Qdrant L2 (semantic
-        search) run concurrently to minimise latency (<50 ms P99).
+        Phase 1, Parallel fetch: the L1 read (recent turns) runs concurrently with
+        the whole L2 path (embed the query, search, optional rerank), so the fetch
+        takes as long as the slower of the two rather than their sum.
 
         Phase 2, Budget allocation: the token budget is divided between system
         prompt, episodic memory, session turns, and the current turn using the
         fractions in MemoryConfig.
 
-        Phase 3, Relevance ranking: Qdrant results are filtered at the
-        configured threshold and re-ranked by
-        ``0.7 × cosine_similarity + 0.3 × recency_score``.
+        Phase 3, Relevance ranking: L2 results are filtered at the configured
+        threshold and ranked by reciprocal rank fusion of dense, lexical and
+        recency signals (or ``0.7 × cosine_similarity + 0.3 × recency_score``
+        when ``hybrid_retrieval`` is off).
 
         Phase 4, Priority pruning: if results exceed the allocated budget,
         oldest session turns are dropped first, then lowest-ranked memories.
@@ -219,13 +226,17 @@ class MemoryManager:
             session_id: Session identifier.
             query: The user's current message; drives L2 semantic search.
             token_budget: Total tokens available for context. Must be > 0.
+            redact: Sensitivity classes to mask in the returned memories, such as
+                ``["pii", "sensitive"]``: each matching memory's content becomes
+                ``"[redacted: <class>]"``. ``None`` uses ``config.redact_sensitivities``;
+                an empty list masks nothing for this call. Turns are never masked.
 
         Returns:
             RetrievedContext with recent_turns, episodic_memories, and budget stats.
 
         Raises:
             TokenBudgetError: If ``token_budget`` is 0 or negative.
-            ValidationError: If agent_id or session_id are invalid.
+            ValidationError: If agent_id, session_id or redact are invalid.
             StoreConnectionError: If Redis or Qdrant fail after retries.
             EmbeddingError: If the embedding call fails after retries.
         """
@@ -237,25 +248,18 @@ class MemoryManager:
                 f"token_budget must be > 0, got {token_budget}",
                 details={"token_budget": token_budget},
             )
+        redact_classes = self._redaction_for(redact)
 
         start = time.monotonic()
 
-        # Phase 1, parallel fetch: embed the query and pull recent L1 turns concurrently.
-        query_embedding, recent_turns = await asyncio.gather(
-            self._embedder.embed(query),
+        # Phase 1, parallel fetch: the L1 read runs alongside the whole L2 path, which has to
+        # embed the query before it can search, so neither waits for the other.
+        recent_turns, episodic_memories = await asyncio.gather(
             self._l1.get_recent_turns(agent_id, session_id),
+            self._fetch_long_term(agent_id, query),
         )
-
-        # Phase 3, semantic search against L2 (requires the embedding from Phase 1).
-        episodic_memories = await self._l2.search(
-            agent_id=agent_id,
-            query_embedding=query_embedding,
-            threshold=self._threshold,
-            limit=self._cfg.max_episodic_memories,
-            query_text=query if self._cfg.hybrid_retrieval else None,
-        )
-        # Phase 3b, optional cross-encoder rerank over the top-K (precision lift; A4).
-        episodic_memories = await self._maybe_rerank(query, episodic_memories)
+        # Mask before pruning, so the budget counts the placeholder that is actually sent.
+        episodic_memories = redact_memories(episodic_memories, redact_classes, self._count_tokens)
 
         # Phase 2, budget allocation.
         episodic_budget = int(token_budget * self._cfg.budget_fraction_episodic)
@@ -420,16 +424,21 @@ class MemoryManager:
         agent_id: str,
         query: str,
         limit: int = 10,
+        *,
+        redact: Iterable[Sensitivity] | None = None,
     ) -> list[MemoryEntry]:
-        """Semantic search over Qdrant L2 for a given agent.
+        """Semantic search over L2 long-term memory for a given agent.
 
-        Results are ranked by the same formula used in ``retrieve_context()``:
-        ``0.7 × cosine_similarity + 0.3 × recency_score``.
+        Results are ranked the same way as in ``retrieve_context()``: reciprocal rank fusion of
+        dense, lexical and recency signals, or ``0.7 × cosine_similarity + 0.3 × recency_score``
+        when ``hybrid_retrieval`` is off.
 
         Args:
             agent_id: Agent whose memories to search.
             query: Search query in plain text.
             limit: Maximum number of results to return.
+            redact: Sensitivity classes to mask in the results, as for ``retrieve_context()``.
+                ``None`` uses ``config.redact_sensitivities``.
 
         Returns:
             List of MemoryEntry objects, sorted by descending relevance score.
@@ -443,6 +452,7 @@ class MemoryManager:
         _validate_text(query, "query", _MAX_QUERY_LEN)
         if limit < 1:
             raise ValidationError("limit", "must be ≥ 1")
+        redact_classes = self._redaction_for(redact)
 
         embedding = await self._embedder.embed(query)
         # Over-fetch when reranking so the cross-encoder has a candidate pool to reorder.
@@ -455,7 +465,27 @@ class MemoryManager:
             query_text=query if self._cfg.hybrid_retrieval else None,
         )
         reranked = await self._maybe_rerank(query, candidates)
-        return reranked[:limit]
+        return redact_memories(reranked[:limit], redact_classes, self._count_tokens)
+
+    def _redaction_for(self, redact: Iterable[Sensitivity] | None) -> frozenset[Sensitivity]:
+        """The classes to mask for one read: the call's own list, else the configured default."""
+        return self._redact_default if redact is None else resolve_redaction(redact)
+
+    async def _fetch_long_term(self, agent_id: str, query: str) -> list[MemoryEntry]:
+        """The L2 half of the parallel fetch: embed the query, search, then the optional rerank.
+
+        Kept as one coroutine so ``retrieve_context`` can run it concurrently with the L1 read.
+        """
+        query_embedding = await self._embedder.embed(query)
+        candidates = await self._l2.search(
+            agent_id=agent_id,
+            query_embedding=query_embedding,
+            threshold=self._threshold,
+            limit=self._cfg.max_episodic_memories,
+            query_text=query if self._cfg.hybrid_retrieval else None,
+        )
+        # Optional cross-encoder rerank over the top-K (precision lift; A4).
+        return await self._maybe_rerank(query, candidates)
 
     async def _maybe_rerank(self, query: str, entries: list[MemoryEntry]) -> list[MemoryEntry]:
         """Apply the optional cross-encoder rerank over the top-K candidates. No-op when the

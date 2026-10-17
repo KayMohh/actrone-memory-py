@@ -125,6 +125,8 @@ async def retrieve_context(
     session_id: str,
     query: str,
     token_budget: int,
+    *,
+    redact: Iterable[Sensitivity] | None = None,
 ) -> RetrievedContext
 ```
 
@@ -136,12 +138,14 @@ async def retrieve_context(
 | `session_id` | `str` | Same session ID you used in `store_turn()`. |
 | `query` | `str` | The user's current message. This is used to search long-term memory for relevant past conversations. |
 | `token_budget` | `int` | How many tokens you can spare for memory context. Must be greater than 0. A safe default is `4096`. |
+| `redact` | `list[Sensitivity]` or `None` | Sensitivity classes to mask in the returned memories, for example `["pii", "sensitive"]`. Each match comes back as `"[redacted: pii]"` with its embedding dropped. `None` (the default) uses `redact_sensitivities` from the config; `[]` masks nothing for this call. Turns are never masked. |
 
 **Returns:** `RetrievedContext`, see [Data Types](#data-types) below.
 
 **Can fail with:**
 
 - `TokenBudgetError`, if you pass `token_budget=0` or less
+- `ValidationError`, if `redact` names an unknown sensitivity class
 - `StoreConnectionError`, if Redis or Qdrant is unreachable
 - `EmbeddingError`, if the embedding API call fails
 
@@ -256,6 +260,8 @@ async def search_memories(
     agent_id: str,
     query: str,
     limit: int = 10,
+    *,
+    redact: Iterable[Sensitivity] | None = None,
 ) -> list[MemoryEntry]
 ```
 
@@ -266,6 +272,7 @@ async def search_memories(
 | `agent_id` | `str` | - | Which agent's memories to search. |
 | `query` | `str` | - | What you're looking for, in plain English. |
 | `limit` | `int` | `10` | Maximum number of results to return. |
+| `redact` | `list[Sensitivity]` or `None` | `None` | Sensitivity classes to mask in the results, as for `retrieve_context()`. `None` uses the config default. |
 
 **Returns:** `list[MemoryEntry]`, sorted by relevance, filtered at the configured threshold.
 
@@ -448,6 +455,7 @@ async with MemoryManager.create(config) as memory:
 | `token_counter` | `ACTRONE_TOKEN_COUNTER` | `heuristic` | `heuristic` (about 4 characters per token, no network) or `tiktoken` (exact counts, needs the `[tiktoken]` extra). |
 | `auto_summarise` | `ACTRONE_AUTO_SUMMARISE` | `true` | Automatically compress old conversations into long-term memory |
 | `summarise_after_turns` | `ACTRONE_SUMMARISE_AFTER_TURNS` | `20` | Trigger summarisation after this many turns |
+| `redact_sensitivities` | `ACTRONE_REDACT_SENSITIVITIES` | `[]` | Sensitivity classes masked whenever memories are read, for example `'["pii", "sensitive"]'`. Matching memories come back as `[redacted: <class>]`. Stored memories are not changed. |
 
 **Token budget fractions** (these must add up to exactly 1.0):
 

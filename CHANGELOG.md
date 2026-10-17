@@ -4,6 +4,24 @@ All notable changes to `actrone-memory` follow [Semantic Versioning](https://sem
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **Redaction on read.** `retrieve_context()` and `search_memories()` take `redact=["pii", "sensitive"]`,
+  and `MemoryConfig.redact_sensitivities` (`ACTRONE_REDACT_SENSITIVITIES`) sets it for every read, so
+  every framework adapter built on those methods is covered. A matching memory comes back with its
+  content replaced by `[redacted: <class>]` and its embedding dropped; the stored memory is not changed,
+  and `redact=[]` turns it off for one call. It acts only on sensitivity tags: raw turns carry none, so
+  they are never masked. `redacted_content()` and `SENSITIVITIES` are exported.
+
+### Changed
+
+- **`retrieve_context` reads L1 while L2 embeds and searches.** The recent-turn read used to run
+  only alongside the query embedding, and the long-term search waited for both. It now runs
+  alongside the whole long-term path (embed, search, optional rerank), so a retrieval waits for
+  the slower of the two tiers instead of their sum, as the docs describe. Results are unchanged.
+
 ## [0.2.1] - 2026-10-01
 
 Framework integration fixes found by running every integration against the real framework at the

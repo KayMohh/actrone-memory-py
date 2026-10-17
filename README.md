@@ -295,10 +295,23 @@ protection here holds **only for local models** (in-process / a local Ollama end
 set a **cloud** provider, the raw text, including PII-classified content, is sent there. This library does
 **not** tokenise it first.
 
-Actrone's **hosted** platform adds **MAL (Memory Abstraction Layer)**, which tokenises PII *before* any
-inference, a structural guarantee that makes **cloud** models safe (same API, one-import migration). Short
-form: **local-first by default; cloud-capable; PII stays protected only on local models; MAL (hosted) makes
-cloud safe.**
+**Redaction on read.** To keep tagged personal data out of what you send a model, turn on redaction for
+every read with `ACTRONE_REDACT_SENSITIVITIES='["pii", "sensitive"]'` (or
+`MemoryConfig(redact_sensitivities=[...])`), or for one call with `redact=`:
+
+```python
+ctx = await memory.retrieve_context(agent_id, session_id, query, 4096, redact=["pii", "sensitive"])
+# A fact tagged pii comes back as "[redacted: pii]", with its embedding dropped.
+```
+
+It covers `retrieve_context()` and `search_memories()`, and so every framework adapter built on them.
+Stored memories do not change, and `redact=[]` turns it off for a single call. It acts only on tags: raw
+turns are never classified, so they are never masked, and the library does not detect personal data on its
+own.
+
+Actrone's **hosted** platform, when it launches, will add **MAL (Memory Abstraction Layer)** to tokenise PII
+*before* inference, so cloud models never receive the raw values. It has not launched yet. Short form:
+**local-first by default; cloud-capable; PII stays on your machine only with local models.**
 
 ---
 
@@ -479,6 +492,7 @@ setting a single one.
 | `ACTRONE_TOKEN_COUNTER` | `heuristic` | `heuristic` (about 4 characters per token, no network) or `tiktoken` (exact counts; needs `pip install "actrone-memory[tiktoken]"`, which downloads its encoding once). |
 | `ACTRONE_AUTO_SUMMARISE` | `true` | Automatically compress old conversations into long-term memory. |
 | `ACTRONE_SUMMARISE_AFTER_TURNS` | `20` | How many messages before auto-summarisation runs. |
+| `ACTRONE_REDACT_SENSITIVITIES` | `[]` | Sensitivity classes masked whenever memories are read, for example `'["pii", "sensitive"]'`. Matching memories come back as `[redacted: <class>]`. |
 
 ---
 
@@ -496,9 +510,9 @@ setting a single one.
 
 ## Part of Actrone
 
-`actrone-memory` is the open-source memory layer powering [Actrone](https://actrone.com), a full infrastructure platform for production AI agents.
+`actrone-memory` is the open-source memory layer behind [Actrone](https://actrone.com), a platform for production AI agents that is in development.
 
-When you're ready for **durable task execution**, **multi-model routing**, **tool supervision**, and **AI governance** on top of your memory layer, the hosted platform is one API key away.
+The hosted platform will add **durable task execution**, **multi-model routing**, **tool supervision**, and **AI governance** on top of your memory layer. It has not launched yet; [join the waitlist](https://actrone.com) to hear when it does.
 
 ---
 

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from actrone_memory.exceptions import ConfigurationError
+from actrone_memory.models import Sensitivity
 
 # Admission threshold for an embedder that declares no calibrated ``relevance_threshold``, such as
 # the OpenAI embedder or a custom one you pass in yourself.
@@ -119,6 +120,14 @@ class MemoryConfig(BaseSettings):
     # default because it costs one LLM call per extraction. Rides the same cadence
     # as auto-summarisation to stay cost-bounded.
     extract_facts: bool = False
+
+    # ── Redaction on read (opt-in) ───────────────────────────────────────
+    # Sensitivity classes whose memories come back masked from retrieve_context() and
+    # search_memories(), and so from every framework adapter built on them: the content becomes
+    # "[redacted: <class>]" and the embedding is dropped. Stored memories are not changed. Tags come
+    # from the fact extractor or from inject_memory(); raw turns carry none, so they are never
+    # redacted. A per-call ``redact=`` overrides this. Env: ACTRONE_REDACT_SENSITIVITIES='["pii"]'.
+    redact_sensitivities: list[Sensitivity] = Field(default_factory=list)
 
     # ── Auto-summarisation ───────────────────────────────────────────────
     auto_summarise: bool = True

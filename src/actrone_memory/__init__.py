@@ -46,6 +46,7 @@ from actrone_memory.models import (
     Turn,
 )
 from actrone_memory.protocols import L1Store, L2Store
+from actrone_memory.redaction import SENSITIVITIES, redacted_content
 
 __version__ = "0.2.1"
 __all__ = [
@@ -55,6 +56,8 @@ __all__ = [
     "ContentType",
     "MemorySource",
     "Sensitivity",
+    "SENSITIVITIES",
+    "redacted_content",
     "RetrievedContext",
     "SessionMetadata",
     "ToolResult",

@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from actrone_memory.config import MemoryConfig
 from actrone_memory.exceptions import TokenBudgetError, ValidationError
+from actrone_memory.in_memory import InMemoryStore
 from actrone_memory.manager import MemoryManager, create_memory_manager
-from actrone_memory.models import MemoryEntry, SessionMetadata, Turn
+from actrone_memory.models import ContentType, MemoryEntry, SessionMetadata, Turn
 from tests.conftest import ConstantEmbedder
 
 
@@ -458,4 +460,58 @@ async def test_create_uses_an_injected_reranker():
     await mm.search_memories("a1", "fact")
 
     assert reranker.calls == 1, "the injected reranker was not used"
+    await mm.close()
+
+
+class _RendezvousStore(InMemoryStore):
+    """Once armed, each tier's read waits until the other tier's read has started.
+
+    A sequential fetch can never satisfy both waits and times out; a concurrent fetch meets in the
+    middle straight away. The timeout only bounds a regression, it is not a synchronisation sleep.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.armed = False
+        self.l1_started = asyncio.Event()
+        self.l2_started = asyncio.Event()
+
+    async def get_recent_turns(
+        self, agent_id: str, session_id: str, n: int | None = None
+    ) -> list[Turn]:
+        if self.armed:
+            self.l1_started.set()
+            await asyncio.wait_for(self.l2_started.wait(), timeout=2)
+        return await super().get_recent_turns(agent_id, session_id, n)
+
+    async def search(
+        self,
+        agent_id: str,
+        query_embedding: list[float],
+        threshold: float,
+        limit: int = 20,
+        content_types: list[ContentType] | None = None,
+        query_text: str | None = None,
+    ) -> list[MemoryEntry]:
+        if self.armed:
+            self.l2_started.set()
+            await asyncio.wait_for(self.l1_started.wait(), timeout=2)
+        return await super().search(
+            agent_id, query_embedding, threshold, limit, content_types, query_text
+        )
+
+
+@pytest.mark.asyncio
+async def test_retrieve_context_reads_l1_while_l2_embeds_and_searches():
+    """The L1 read overlaps the whole L2 path, so the fetch waits for the slower side only."""
+    store = _RendezvousStore()
+    cfg = MemoryConfig(embedding_provider="hashing")  # type: ignore[call-arg]
+    mm = await MemoryManager.create(cfg, l1=store, l2=store, embedder=ConstantEmbedder())
+    await mm.store_turn("a1", "s1", "hello", "hi")
+
+    store.armed = True
+    ctx = await mm.retrieve_context("a1", "s1", "hello", token_budget=1000)
+
+    assert store.l1_started.is_set() and store.l2_started.is_set()
+    assert len(ctx.recent_turns) == 1
     await mm.close()
