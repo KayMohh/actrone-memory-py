@@ -4,7 +4,7 @@ All notable changes to `actrone-memory` follow [Semantic Versioning](https://sem
 
 ---
 
-## [Unreleased]
+## [0.3.0] - 2026-10-17
 
 ### Added
 

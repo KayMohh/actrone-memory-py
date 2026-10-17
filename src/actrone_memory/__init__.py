@@ -48,7 +48,7 @@ from actrone_memory.models import (
 from actrone_memory.protocols import L1Store, L2Store
 from actrone_memory.redaction import SENSITIVITIES, redacted_content
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"
 __all__ = [
     "MemoryManager",
     "MemoryConfig",
