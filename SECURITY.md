@@ -83,5 +83,5 @@ We only maintain the latest release. Older versions do not receive security patc
 
 | Version | Security fixes |
 | --- | --- |
-| 0.2.x (current) | Yes |
-| Older than 0.2.0 | No |
+| 0.3.x (current) | Yes |
+| Older than 0.3.0 | No |
