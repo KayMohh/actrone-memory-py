@@ -8,11 +8,14 @@
 ## Quick Navigation
 
 - [MemoryManager](#memorymanager), the main object you'll use
-  - [create()](#create), connect to Redis and Qdrant
+  - [create()](#create), connect to the configured backend
   - [store_turn()](#store_turn), save a conversation message
   - [retrieve_context()](#retrieve_context), fetch relevant memory for the next reply
+  - [get_recent_turns()](#get_recent_turns), read raw recent conversation turns
   - [inject_memory()](#inject_memory), manually add a fact to long-term memory
+  - [extract_memories()](#extract_memories), extract durable facts from conversation turns
   - [delete_memory()](#delete_memory), remove a specific memory
+  - [erase_agent_memories()](#erase_agent_memories), wipe all long-term memories for an agent
   - [clear_session()](#clear_session), wipe a session's short-term memory
   - [search_memories()](#search_memories), search long-term memory directly
   - [get_session_metadata()](#get_session_metadata), check session stats
@@ -20,6 +23,8 @@
 - [MemoryConfig](#memoryconfig), all configuration options
 - [Errors](#errors), what can go wrong and how to handle it
 - [Framework Integrations](#framework-integrations), LangChain, LangGraph, CrewAI
+
+> This page focuses on the core API and a few representative framework integrations. The full adapter list, version ranges, and optional extras are in the project README compatibility matrix.
 
 ---
 
@@ -37,29 +42,47 @@ By default both tiers are served by an in-process store, so nothing external is 
 
 **What it does:** Builds the stores for the configured backend (in-process by default, or Redis + Qdrant when `backend="redis_qdrant"`), sets up the embedding provider, and returns a ready-to-use `MemoryManager`. Think of it as "opening" the memory system.
 
+`MemoryManager.create()` is an `async def`, so it returns a coroutine and is not itself an async context manager. Use `create_memory_manager()` for `async with` or await it manually and then close it yourself.
+
 ```python
 @classmethod
-async def create(cls, config: MemoryConfig | None = None) -> MemoryManager
+async def create(
+    cls,
+    config: MemoryConfig | None = None,
+    *,
+    l1: L1Store | None = None,
+    l2: L2Store | None = None,
+    embedder: Embedder | None = None,
+    extractor: FactExtractor | None = None,
+    reranker: CrossEncoderReranker | None = None,
+) -> MemoryManager
 ```
 
 **Parameters:**
 
-| Parameter | Type | Description |
-| --- | --- | --- |
-| `config` | `MemoryConfig` or `None` | Your settings. If you leave this blank, it reads from environment variables automatically. |
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `config` | `MemoryConfig` or `None` | `None` | Your settings. If left blank, reads from environment variables automatically. |
+| `l1` | `L1Store` or `None` | `None` | Custom hot-tier store implementing the `L1Store` protocol (e.g. `PostgresStore`). |
+| `l2` | `L2Store` or `None` | `None` | Custom long-term store implementing the `L2Store` protocol (e.g. `PgVectorStore`, `MyWeaviateStore`). |
+| `embedder` | `Embedder` or `None` | `None` | Custom embedding provider implementing the `Embedder` protocol. |
+| `extractor` | `FactExtractor` or `None` | `None` | Custom fact extraction provider. |
+| `reranker` | `CrossEncoderReranker` or `None` | `None` | Optional cross-encoder reranker. |
 
 **Returns:** A `MemoryManager` instance, ready to use.
 
 **Can fail with:**
 
-- `ConfigurationError`, if required settings are missing (e.g. you forgot to set `ACTRONE_OPENAI_API_KEY`)
-- `StoreConnectionError`, if Redis or Qdrant isn't running or can't be reached
+- `ConfigurationError`, if required settings are missing or invalid (for example, when `embedding_provider="openai"` and `ACTRONE_OPENAI_API_KEY` is unset)
+- `StoreConnectionError`, if Redis or Qdrant isn't running or can't be reached when the durable backend is selected
 
 **The two recommended ways to use it:**
 
 ```python
+from actrone_memory import MemoryManager, create_memory_manager
+
 # Option A, context manager (recommended)
-# The connection closes automatically when the block ends, even if an error occurs.
+# The manager closes automatically when the block ends, even if an error occurs.
 async with create_memory_manager() as memory:
     await memory.store_turn(...)
     context = await memory.retrieve_context(...)
@@ -76,7 +99,7 @@ finally:
 
 ### `store_turn()`
 
-**What it does:** Saves one exchange between the user and the agent (one "turn") into short-term memory (Redis). If auto-summarisation is enabled, it also quietly triggers a background compression to long-term memory after enough turns accumulate.
+**What it does:** Saves one exchange between the user and the agent (one "turn") into the short-term tier. If auto-summarisation is enabled, it also quietly triggers a background compression to long-term memory after enough turns accumulate.
 
 ```python
 async def store_turn(
@@ -100,7 +123,7 @@ async def store_turn(
 
 **Returns:** `str`, the ID of the saved turn (useful if you need to reference it later).
 
-**Can fail with:** `StoreConnectionError`, if Redis is unreachable.
+**Can fail with:** `StoreConnectionError`, if the backing store is unreachable.
 
 ```python
 turn_id = await memory.store_turn(
@@ -138,7 +161,7 @@ async def retrieve_context(
 | `session_id` | `str` | Same session ID you used in `store_turn()`. |
 | `query` | `str` | The user's current message. This is used to search long-term memory for relevant past conversations. |
 | `token_budget` | `int` | How many tokens you can spare for memory context. Must be greater than 0. A safe default is `4096`. |
-| `redact` | `list[Sensitivity]` or `None` | Sensitivity classes to mask in the returned memories, for example `["pii", "sensitive"]`. Each match comes back as `"[redacted: pii]"` with its embedding dropped. `None` (the default) uses `redact_sensitivities` from the config; `[]` masks nothing for this call. Turns are never masked. |
+| `redact` | `list[Sensitivity]` or `None` | Sensitivity classes to mask in the returned memories, for example `['pii', 'sensitive']`. Each match comes back as `"[redacted: pii]"` with its embedding dropped. `None` (the default) uses `redact_sensitivities` from the config; `[]` masks nothing for this call. Turns are never masked. |
 
 **Returns:** `RetrievedContext`, see [Data Types](#data-types) below.
 
@@ -146,7 +169,7 @@ async def retrieve_context(
 
 - `TokenBudgetError`, if you pass `token_budget=0` or less
 - `ValidationError`, if `redact` names an unknown sensitivity class
-- `StoreConnectionError`, if Redis or Qdrant is unreachable
+- `StoreConnectionError`, if the backing store is unreachable
 - `EmbeddingError`, if the embedding API call fails
 
 ```python
@@ -170,9 +193,42 @@ print(f"Used {context.total_tokens_used} of {context.token_budget} tokens")
 
 ---
 
+### `get_recent_turns()`
+
+**What it does:** Reads raw recent conversation turns from the short-term tier (L1) without running semantic search or token budget allocation. Used by framework chat-history adapters.
+
+```python
+async def get_recent_turns(
+    agent_id: str,
+    session_id: str,
+    *,
+    limit: int | None = None,
+) -> list[Turn]
+```
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `agent_id` | `str` | - | The agent whose turns to fetch. |
+| `session_id` | `str` | - | The conversation session ID. |
+| `limit` | `int` or `None` | `None` | Max number of most recent turns to return (newest window). Defaults to `max_session_turns`. |
+
+**Returns:** `list[Turn]`, oldest first.
+
+**Can fail with:** `ValidationError`, `StoreConnectionError`
+
+```python
+turns = await memory.get_recent_turns(agent_id="support-bot", session_id="user-abc-123", limit=10)
+for turn in turns:
+    print(f"{turn.user_message} -> {turn.assistant_message}")
+```
+
+---
+
 ### `inject_memory()`
 
-**What it does:** Manually writes a piece of information directly into long-term memory (Qdrant). Use this to seed an agent with background knowledge before a conversation starts, things like user preferences, company policies, or facts you've collected elsewhere.
+**What it does:** Manually writes a piece of information directly into the long-term tier. Use this to seed an agent with background knowledge before a conversation starts, such as user preferences, company policies, or facts you've collected elsewhere.
 
 ```python
 async def inject_memory(
@@ -181,6 +237,8 @@ async def inject_memory(
     importance: float = 0.8,
     session_id: str = "injected",
     topic_tags: list[str] | None = None,
+    source: str = "injected",
+    sensitivity: Sensitivity = "none",
 ) -> str
 ```
 
@@ -192,11 +250,13 @@ async def inject_memory(
 | `content` | `str` | - | The text to remember. Write it as a clear, self-contained sentence. |
 | `importance` | `float` | `0.8` | A score from 0.0 to 1.0. Higher importance means this memory surfaces more readily. Most injected facts should be 0.8 or higher. |
 | `session_id` | `str` | `"injected"` | A label for where this memory came from. Can be anything, useful for filtering or debugging. |
-| `topic_tags` | list or `None` | `None` | Optional keywords that describe this memory, e.g. `["user-profile", "preferences"]`. |
+| `topic_tags` | `list[str]` or `None` | `None` | Optional keywords that describe this memory, e.g. `["user-profile", "preferences"]`. |
+| `source` | `str` | `"injected"` | Provenance attribution (e.g. `"injected"`, `"import:crm"`, `"tool:web_search"`). |
+| `sensitivity` | `Sensitivity` | `"none"` | Classification for governance and right-to-erasure (`"none"`, `"low"`, `"pii"`, `"sensitive"`). |
 
 **Returns:** `str`, the memory ID (save this if you want to delete the memory later).
 
-**Can fail with:** `StoreConnectionError`, `EmbeddingError`
+**Can fail with:** `ValidationError`, `StoreConnectionError`, `EmbeddingError`
 
 ```python
 memory_id = await memory.inject_memory(
@@ -204,7 +264,44 @@ memory_id = await memory.inject_memory(
     content    = "This user is a Premium subscriber and prefers email communication over chat.",
     importance = 0.95,
     topic_tags = ["user-profile", "communication-preferences"],
+    source     = "import:crm",
+    sensitivity = "low",
 )
+```
+
+---
+
+### `extract_memories()`
+
+**What it does:** Mines a session's conversation turns for durable atomic facts and stores them in long-term memory (L2) as `content_type="fact"` and `source="extracted"`. Requires an LLM fact extractor (e.g. OpenAI provider).
+
+```python
+async def extract_memories(
+    agent_id: str,
+    session_id: str,
+    *,
+    turns: list[Turn] | None = None,
+) -> list[str]
+```
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `agent_id` | `str` | - | The agent to attribute extracted facts to. |
+| `session_id` | `str` | - | The conversation session to mine. |
+| `turns` | `list[Turn]` or `None` | `None` | Optional turns to extract from. Defaults to fetching recent turns from L1. |
+
+**Returns:** `list[str]`, IDs of the newly stored fact memories.
+
+**Can fail with:** `ValidationError`, `StoreConnectionError`, `EmbeddingError`
+
+```python
+fact_ids = await memory.extract_memories(
+    agent_id   = "support-bot",
+    session_id = "user-abc-123",
+)
+print(f"Extracted {len(fact_ids)} facts into long-term memory")
 ```
 
 ---
@@ -224,7 +321,7 @@ async def delete_memory(agent_id: str, memory_id: str) -> None
 | `agent_id` | `str` | The agent that owns this memory (used for audit logging). |
 | `memory_id` | `str` | The ID returned when you called `inject_memory()`, or from a `search_memories()` result. |
 
-**Can fail with:** `MemoryNotFoundError` (if the ID doesn't exist), `StoreConnectionError`
+**Can fail with:** `ValidationError`, `MemoryNotFoundError` (if the ID doesn't exist), `StoreConnectionError`
 
 ```python
 await memory.delete_memory(
@@ -235,15 +332,50 @@ await memory.delete_memory(
 
 ---
 
+### `erase_agent_memories()`
+
+**What it does:** Permanently deletes memories for an agent across storage tiers (local right-to-erasure / GDPR compliance). Always deletes all L2 episodic memories for `agent_id`. If `session_id` is also provided, clears that session's L1 turns as well.
+
+```python
+async def erase_agent_memories(
+    agent_id: str,
+    session_id: str | None = None,
+) -> None
+```
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `agent_id` | `str` | - | The agent whose memories to erase. |
+| `session_id` | `str` or `None` | `None` | Optional session ID to also clear from short-term memory (L1). |
+
+**Can fail with:** `ValidationError`, `StoreConnectionError`
+
+```python
+# Hard delete all long-term memories for this agent:
+await memory.erase_agent_memories(agent_id="support-bot")
+
+# Or erase long-term memories AND a specific session's turns:
+await memory.erase_agent_memories(agent_id="support-bot", session_id="user-abc-123")
+```
+
+---
+
 ### `clear_session()`
 
-**What it does:** Deletes all the short-term (Redis) messages for one session. Useful when a conversation is fully resolved and you want to free up memory.
+**What it does:** Deletes all messages for one session in the short-term tier. Useful when a conversation is fully resolved and you want to free up memory.
 
-> **Note:** This only clears short-term Redis memory. Long-term Qdrant memories (summaries and injected facts) are **not** deleted. They persist across sessions by design.
+> **Note:** This only clears short-term memory. Long-term memories (summaries, injected facts, extracted facts) are **not** deleted; they persist across sessions by design.
 
 ```python
 async def clear_session(agent_id: str, session_id: str) -> None
 ```
+
+**Can fail with:**
+
+- `ValidationError`, if `agent_id` or `session_id` is invalid
+- `StoreConnectionError`, if the underlying store cannot be reached
 
 ```python
 await memory.clear_session(agent_id="support-bot", session_id="user-abc-123")
@@ -276,6 +408,12 @@ async def search_memories(
 
 **Returns:** `list[MemoryEntry]`, sorted by relevance, filtered at the configured threshold.
 
+**Can fail with:**
+
+- `ValidationError`, if `agent_id`, `query`, or `limit` is invalid
+- `StoreConnectionError`, if the backing store is unreachable
+- `EmbeddingError`, if embedding generation fails
+
 ```python
 results = await memory.search_memories(
     agent_id = "support-bot",
@@ -296,6 +434,11 @@ for result in results:
 ```python
 async def get_session_metadata(agent_id: str, session_id: str) -> SessionMetadata | None
 ```
+
+**Can fail with:**
+
+- `ValidationError`, if `agent_id` or `session_id` is invalid
+- `StoreConnectionError`, if the underlying store cannot be reached
 
 ```python
 meta = await memory.get_session_metadata("support-bot", "user-abc-123")
@@ -373,7 +516,7 @@ class Turn:
 
 ### `MemoryEntry`
 
-A single item stored in long-term memory (Qdrant). Could be a compressed summary, an injected fact, or a tool result.
+A single item stored in long-term memory. It can hold a compressed summary, an injected fact, a tool result, or a fact extracted during a session.
 
 ```python
 class MemoryEntry:
@@ -381,12 +524,15 @@ class MemoryEntry:
     agent_id: str
     session_id: str
     content: str           # The actual text of the memory
-    content_type: str      # One of: "turn", "summary", "tool_result", "injected"
+    content_type: str      # One of: "turn", "summary", "tool_result", "injected", "fact"
+    embedding: list[float] | None
     importance_score: float   # 0.0-1.0, how important this memory is
     topic_tags: list[str]  # Keywords describing this memory
     token_count: int
     timestamp: datetime    # When this memory was created (UTC)
     source_turn_ids: list[str]  # Which turns this memory was derived from
+    source: str           # Where the fact came from, e.g. "user", "assistant", "summary", "extracted"
+    sensitivity: str      # One of: "none", "low", "pii", "sensitive"
 ```
 
 ---
@@ -421,22 +567,53 @@ class SessionMetadata:
 
 ---
 
+### `Sensitivity`, `MemorySource`, `ContentType`
+
+Vocabularies for memory classification, provenance, and governance:
+
+```python
+ContentType = Literal["turn", "summary", "tool_result", "injected", "fact"]
+
+MemorySource = Literal[
+    "user",        # stated by the user
+    "assistant",   # asserted by the agent
+    "tool",        # produced by a tool call
+    "summary",     # distilled from conversation summarisation
+    "injected",    # seeded directly via inject_memory()
+    "extracted",   # derived by fact extraction
+    "reflection",  # synthesised by a reflection pass
+    "imported",    # loaded from an external system
+    "unknown",     # provenance not recorded
+]  # Or any custom namespaced string such as "import:crm"
+
+Sensitivity = Literal[
+    "none",       # non-personal, freely retained
+    "low",        # mildly personal / preference data
+    "pii",        # personally identifiable information
+    "sensitive",  # special-category / regulated (health, financial, credentials)
+]
+```
+
+---
+
 ## MemoryConfig
 
 All configuration is read from environment variables automatically. You can also create a `MemoryConfig` object explicitly if you prefer not to use environment variables.
 
 ```python
-from actrone_memory import MemoryConfig
+from actrone_memory import MemoryConfig, create_memory_manager
 
 config = MemoryConfig(
+    backend            = "redis_qdrant",
     redis_url          = "redis://localhost:6379",
     qdrant_url         = "http://localhost:6333",
+    embedding_provider = "openai",
     openai_api_key     = "sk-...",
     session_ttl_hours  = 48,
     max_session_turns  = 100,
 )
 
-async with MemoryManager.create(config) as memory:
+async with create_memory_manager(config) as memory:
     ...
 ```
 
@@ -444,14 +621,19 @@ async with MemoryManager.create(config) as memory:
 
 | Setting | Environment Variable | Default | Description |
 | --- | --- | --- | --- |
+| `backend` | `ACTRONE_BACKEND` | `memory` | `memory` runs fully in-process. Set `redis_qdrant` for the durable backend. |
 | `redis_url` | `ACTRONE_REDIS_URL` | `redis://localhost:6379` | Where your Redis server is running |
 | `qdrant_url` | `ACTRONE_QDRANT_URL` | `http://localhost:6333` | Where your Qdrant server is running |
 | `qdrant_api_key` | `ACTRONE_QDRANT_API_KEY` | `None` | API key for Qdrant Cloud (not needed for self-hosted) |
+| `qdrant_collection` | `ACTRONE_QDRANT_COLLECTION` | `agent_memories` | Collection name in Qdrant |
 | `embedding_provider` | `ACTRONE_EMBEDDING_PROVIDER` | `local` | `local` (best offline embedder available: ONNX, then sentence-transformers, then hashing), `hashing`, or `openai` (needs an API key) |
 | `openai_api_key` | `ACTRONE_OPENAI_API_KEY` | `None` | Required when `embedding_provider = "openai"` |
 | `session_ttl_hours` | `ACTRONE_SESSION_TTL_HOURS` | `24` | How many hours before short-term memory expires |
 | `max_session_turns` | `ACTRONE_MAX_SESSION_TURNS` | `50` | Maximum messages stored in short-term memory per session |
 | `relevance_threshold` | `ACTRONE_RELEVANCE_THRESHOLD` | *(calibrated)* | How similar a memory must be to the query before it's included (0.0-1.0). Unset, the embedder's calibrated value applies: `0.3` lexical, `0.63` bge-small, `0.4` MiniLM, `0.72` for OpenAI or a custom embedder. Raise it to be more selective. |
+| `hybrid_retrieval` | `ACTRONE_HYBRID_RETRIEVAL` | `true` | Combine dense vector search with BM25 lexical ranking via Reciprocal Rank Fusion |
+| `rerank_enabled` | `ACTRONE_RERANK_ENABLED` | `false` | Enable cross-encoder reranking over retrieved candidate memories (requires `[onnx]` extra) |
+| `extract_facts` | `ACTRONE_EXTRACT_FACTS` | `false` | Enable LLM fact extraction from conversation turns (OpenAI provider) |
 | `token_counter` | `ACTRONE_TOKEN_COUNTER` | `heuristic` | `heuristic` (about 4 characters per token, no network) or `tiktoken` (exact counts, needs the `[tiktoken]` extra). |
 | `auto_summarise` | `ACTRONE_AUTO_SUMMARISE` | `true` | Automatically compress old conversations into long-term memory |
 | `summarise_after_turns` | `ACTRONE_SUMMARISE_AFTER_TURNS` | `20` | Trigger summarisation after this many turns |
@@ -480,6 +662,7 @@ from actrone_memory.exceptions import (
     EmbeddingError,        # embedding API failed
     MemoryNotFoundError,   # delete_memory() got a non-existent ID
     TokenBudgetError,      # token_budget was 0 or negative
+    ValidationError,       # invalid API input
 )
 
 # Catch everything:
@@ -492,7 +675,8 @@ except ActroneMemoryError as e:
 try:
     context = await memory.retrieve_context(...)
 except StoreConnectionError as e:
-    print(f"Could not reach {e.store}, falling back to empty context")
+    print(f"Could not reach {e.store} ({e.code}): {e.message}")
+    print(f"Details: {e.details}")
     context = empty_context
 except EmbeddingError:
     print("Embedding failed, retrying without semantic search")
@@ -502,14 +686,17 @@ except EmbeddingError:
 
 - `e.code`, a machine-readable identifier (e.g. `"ERR_STORE_CONNECTION"`), useful for logging
 - `e.message`, a human-readable description of what went wrong
+- `e.details`, a structured dictionary of extra context
+- some error classes also expose convenience attributes such as `e.store` or `e.field`
 
 | Error | Code | When it's raised |
 | --- | --- | --- |
 | `ConfigurationError` | `ERR_CONFIGURATION` | A required setting is missing or invalid when you call `MemoryManager.create()` |
 | `StoreConnectionError` | `ERR_STORE_CONNECTION` | Redis or Qdrant can't be reached |
-| `EmbeddingError` | `ERR_EMBEDDING` | The embedding API (OpenAI) returned an error |
+| `EmbeddingError` | `ERR_EMBEDDING` | The embedding API returned an error |
 | `MemoryNotFoundError` | `ERR_MEMORY_NOT_FOUND` | You called `delete_memory()` with an ID that doesn't exist |
 | `TokenBudgetError` | `ERR_TOKEN_BUDGET` | You passed `token_budget=0` or a negative number |
+| `ValidationError` | `ERR_VALIDATION` | A public API argument was invalid (for example, a bad sensitivity tag or empty ID) |
 
 ---
 
@@ -523,6 +710,9 @@ which is unchanged across both majors. Both are async-only, so drive LangChain w
 or `astream`.
 
 ```python
+from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.runnables.history import RunnableWithMessageHistory
+
 from actrone_memory.integrations.langchain import ActroneChatMessageHistory
 
 history = ActroneChatMessageHistory(
@@ -580,7 +770,11 @@ memory = ActroneCrewMemory(
 )
 
 context = await memory.build_context("competitor pricing")
-task = Task(description=f"{context}\n\nSummarise competitor pricing.", agent=researcher)
+task = Task(
+    description=f"{context}\n\nSummarise competitor pricing.",
+    expected_output="A short summary of competitor pricing and strategic implications.",
+    agent=researcher,
+)
 # ...crew.kickoff(), then store what the crew concluded:
 await memory.save(result, {"task_input": "Summarise competitor pricing."})
 ```
