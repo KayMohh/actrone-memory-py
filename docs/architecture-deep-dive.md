@@ -22,6 +22,8 @@ Two problems come from this:
 
 Inspired by how computers use RAM and a hard drive, we use two different storage systems with different trade-offs.
 
+> **Note:** The diagrams in this document illustrate the architecture using the durable production backend (`backend="redis_qdrant"`, Redis for L1 and Qdrant for L2). By default (`backend="memory"`), `actrone-memory` runs completely in-process with zero external services and zero network egress, using in-memory stores and local embeddings. Postgres + pgvector is also supported via `actrone-memory[pgvector]`.
+
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │                                                                     │

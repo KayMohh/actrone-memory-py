@@ -254,32 +254,6 @@ and a summary lock admits one holder. Each failure raises `ConformanceError` nam
 requirement. `actrone-memory/testing` is the TypeScript equivalent, against the same
 contract, so an adapter in either language is held to the same bar.
 
-The manager does not depend on those classes directly. It depends on two
-`typing.Protocol` seams, `L1Store` and `L2Store` (`actrone_memory.protocols`), so any
-other engine (pgvector, Weaviate, Pinecone, Valkey, Postgres, and so on) works by
-implementing the protocol and passing your instance to `create()`:
-
-```python
-from actrone_memory import MemoryManager
-
-class MyPgVectorStore:          # structurally satisfies L2Store, no subclassing needed
-    async def upsert(self, entry): ...
-    async def search(self, agent_id, query_embedding, threshold, limit=20,
-                     content_types=None, query_text=None): ...
-    async def delete(self, memory_id): ...
-    async def delete_agent_memories(self, agent_id): ...
-    async def close(self): ...
-
-memory = await MemoryManager.create(l2=MyPgVectorStore())
-```
-
-Anything you inject is used as-is and the matching built-in backend is never built, so
-injecting a store opens no connection to Redis or Qdrant. Injecting both stores keeps
-the library entirely free of database drivers.
-
-There is no built-in adapter for those other engines and none is planned as a hard
-dependency: keeping the base install free of database drivers is the point.
-
 ---
 
 ## Privacy and PII: local-first by default, cloud-capable
@@ -319,20 +293,22 @@ Actrone's **hosted** platform, when it launches, will add **MAL (Memory Abstract
 
 Think of it like a human brain. There is a **working memory** for what just happened, and a **long-term memory** for everything else.
 
+> Shown with the `redis_qdrant` backend; the default keeps both tiers in-process.
+
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                        MemoryManager                            │
 │                                                                 │
-│  ┌──────────────────────────┐   ┌───────────────────────────┐  │
-│  │     SHORT-TERM (Redis)   │   │    LONG-TERM (Qdrant)     │  │
-│  │                          │   │                           │  │
-│  │  The last 50 messages    │   │  Compressed summaries     │  │
-│  │  of this conversation.   │   │  of older conversations.  │  │
-│  │                          │   │                           │  │
-│  │  Fast, under 1ms         │   │  Searched by meaning,     │  │
-│  │  Expires after 24h       │   │  not by keyword.          │  │
-│  │                          │   │  ~10ms. Never expires.    │  │
-│  └──────────────────────────┘   └───────────────────────────┘  │
+│  ┌──────────────────────────┐   ┌───────────────────────────┐   │
+│  │     SHORT-TERM (Redis)   │   │    LONG-TERM (Qdrant)     │   │
+│  │                          │   │                           │   │
+│  │  The last 50 messages    │   │  Compressed summaries     │   │
+│  │  of this conversation.   │   │  of older conversations.  │   │
+│  │                          │   │                           │   │
+│  │  Fast, under 1ms         │   │  Searched by meaning,     │   │
+│  │  Expires after 24h       │   │  not by keyword.          │   │
+│  │                          │   │  ~10ms. Never expires.    │   │
+│  └──────────────────────────┘   └───────────────────────────┘   │
 │                                                                 │
 │  When you call retrieve_context(), both are searched in         │
 │  parallel, then the most relevant pieces are selected to fit    │
@@ -346,10 +322,10 @@ The library **prioritises intelligently**. It never silently drops important thi
 
 ```text
 Your token budget: 4,096 tokens
-├── System prompt          ████████░░░░░░░░░░░░  30%  (never pruned)
-├── Long-term memories     ██████░░░░░░░░░░░░░░  25%  (lowest relevance dropped first)
-├── Recent messages        █████████░░░░░░░░░░░  35%  (oldest dropped first)
-└── Current user message   ██░░░░░░░░░░░░░░░░░░  10%  (always kept)
+├── System prompt          ██████░░░░░░░░░░░░░░░  30%  (never pruned)
+├── Long-term memories     █████░░░░░░░░░░░░░░░░░  25%  (lowest relevance dropped first)
+├── Recent messages        ███████░░░░░░░░░░░░░░░  35%  (oldest dropped first)
+└── Current user message   ██░░░░░░░░░░░░░░░░░░░░  10%  (always kept)
 ```
 
 ### Auto-summarisation
@@ -461,7 +437,11 @@ from crewai import Task
 # Each agent in the crew can recall and share findings
 memory = ActroneCrewMemory(agent_id="research-crew", session_id="project-alpha")
 context = await memory.build_context("competitor pricing")
-task = Task(description=f"{context}\n\nSummarise competitor pricing.", agent=researcher)
+task = Task(
+    description=f"{context}\n\nSummarise competitor pricing.",
+    expected_output="A short summary of competitor pricing and strategic implications.",
+    agent=researcher,
+)
 # ...crew.kickoff(), then store what the crew concluded:
 await memory.save(result, {"task_input": "Summarise competitor pricing."})
 ```
@@ -486,6 +466,7 @@ setting a single one.
 | `ACTRONE_OPENAI_API_KEY` | *(none)* | Required **only** when `ACTRONE_EMBEDDING_PROVIDER=openai`. Unused otherwise. |
 | `ACTRONE_REDIS_URL` | `redis://localhost:6379` | Where your Redis is running. Used only when `ACTRONE_BACKEND=redis_qdrant`. |
 | `ACTRONE_QDRANT_URL` | `http://localhost:6333` | Where your Qdrant is running. Used only when `ACTRONE_BACKEND=redis_qdrant`. |
+| `ACTRONE_QDRANT_API_KEY` | *(none)* | API key for Qdrant Cloud. Unused for self-hosted. |
 | `ACTRONE_SESSION_TTL_HOURS` | `24` | How long short-term memory lasts. |
 | `ACTRONE_MAX_SESSION_TURNS` | `50` | Max messages kept in short-term memory. |
 | `ACTRONE_RELEVANCE_THRESHOLD` | *(calibrated)* | How similar a memory must be before it is included (0 to 1). Unset, each embedder uses its calibrated value: `0.3` lexical, `0.63` bge-small, `0.4` MiniLM, and `0.72` for OpenAI or a custom embedder. |
